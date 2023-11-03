@@ -110,7 +110,8 @@ Eigen::MatrixXd EKFSLAM::jacobGt(const Eigen::VectorXd& state, Eigen::Vector2d u
 	/**
 	 * TODO: implement the Jacobian Gt
 	 */
-    Gt = 
+    Gt(0, 2) = -ut(0) * sin(state(2)) * dt;
+    Gt(1, 2) = ut(0) * cos(state(2)) * dt;
 	return Gt;
 }
 
@@ -120,6 +121,9 @@ Eigen::MatrixXd EKFSLAM::jacobFt(const Eigen::VectorXd& state, Eigen::Vector2d u
 	/**
 	 * TODO: implement the Jacobian Ft
 	 */
+    Ft(0, 0) = dt * cos(state(2));
+	Ft(1, 0) = dt * sin(state(2));
+	Ft(2, 1) = dt;
 	return Ft;
 }
 
@@ -152,6 +156,12 @@ void EKFSLAM::addNewLandmark(const Eigen::Vector2d& lm, const Eigen::MatrixXd& I
 	/**
 	 * TODO: implement the function
 	 */
+    mState.conservativeResize(mState.size()+lm.size());
+    mState(mState.size()-2) = lm(0);
+    mState(mState.size()-1) = lm(1);
+    
+    int newlm_size = mCov.size()+2;
+    mCov.conservativeResize(newlm_size, newlm_size);
 }
 
 void EKFSLAM::accumulateMap(){
