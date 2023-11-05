@@ -35,8 +35,8 @@ EKFSLAM::EKFSLAM(ros::NodeHandle &nh):
 	 */
     mState = Eigen::VectorXd::Zero(3); // x, y, yaw
     mCov = Eigen::MatrixXd::Identity(3,3);
-    R = R; // process noise
-    Q = Q; // measurement noise
+    R = Eigen::MatrixXd::Identity(2,2); // process noise
+    Q = 0*Eigen::MatrixXd::Identity(2,2); // measurement noise
 
     std::cout << "EKF SLAM initialized" << std::endl;
 }
@@ -141,7 +141,7 @@ void EKFSLAM::predictState(Eigen::VectorXd& state, Eigen::MatrixXd& cov, Eigen::
 	state = state + jacobB(state, ut, dt) * ut; // update state
 	Eigen::MatrixXd Gt = jacobGt(state, ut, dt);
 	Eigen::MatrixXd Ft = jacobFt(state, ut, dt);
-//	cov = Gt * cov * Gt.transpose() + Ft * R * Ft.transpose(); // update covariance
+	cov = Gt * cov * Gt.transpose() + Ft * R * Ft.transpose(); // update covariance
 }
 
 Eigen::Vector2d EKFSLAM::transform(const Eigen::Vector2d& p, const Eigen::Vector3d& x){
@@ -156,12 +156,12 @@ void EKFSLAM::addNewLandmark(const Eigen::Vector2d& lm, const Eigen::MatrixXd& I
 	/**
 	 * TODO: implement the function
 	 */
-    mState.conservativeResize(mState.size()+lm.size());
-    mState(mState.size()-2) = lm(0);
-    mState(mState.size()-1) = lm(1);
+    // mState.conservativeResize(mState.size()+lm.size());
+    // mState(mState.size()-2) = lm(0);
+    // mState(mState.size()-1) = lm(1);
     
-    int newlm_size = mCov.size()+2;
-    mCov.conservativeResize(newlm_size, newlm_size);
+    // int newlm_size = mCov.size()+2;
+    // mCov.conservativeResize(newlm_size, newlm_size);
 }
 
 void EKFSLAM::accumulateMap(){
@@ -189,7 +189,7 @@ void EKFSLAM::updateMeasurement(){
 		// Implement the data association here, i.e., find the corresponding landmark for each observation
 		/**
 		 * TODO: data association
-		 *
+		 * Eigen::Matrix<double,3,2> Q = Sigma(lm, xwb)
 		 * **/
         if (indices(i) == -1){
             indices(i) = ++globalId;
