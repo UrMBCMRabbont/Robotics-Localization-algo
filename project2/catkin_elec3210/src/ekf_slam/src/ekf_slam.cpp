@@ -139,18 +139,17 @@ Eigen::MatrixXd EKFSLAM::jacobB(const Eigen::VectorXd& state, Eigen::Vector2d ut
 }
 
 void EKFSLAM::predictState(Eigen::VectorXd& state, Eigen::MatrixXd& cov, Eigen::Vector2d ut, double dt){
+    // Note: ut = [v, w]
 	Eigen::MatrixXd Gt = jacobGt(state, ut, dt);
 	Eigen::MatrixXd Ft = jacobFt(state, ut, dt);
-
+	state = state + jacobB(state, ut, dt) * ut; // update state
+	cov = Gt * cov * Gt.transpose() + Ft * R * Ft.transpose(); // update covariance
+	
     std::cout << "state dim:" << state.size() << std::endl;
     std::cout << "cov dim:" << cov.rows() << ", " << cov.cols() << std::endl;
     std::cout << "Gt dim:" << Gt.rows() << ", " << Gt.cols() << std::endl;
     std::cout << "Ft dim:" << Ft.rows() << ", " << Ft.cols() << std::endl;
     std::cout << "R dim:" << R.rows() << ", " << R.cols() << std::endl;
-	
-    // Note: ut = [v, w]
-	state = state + jacobB(state, ut, dt) * ut; // update state
-	cov = Gt * cov * Gt.transpose() + Ft * R * Ft.transpose(); // update covariance
 }
 
 Eigen::Vector2d EKFSLAM::transform(const Eigen::Vector2d& p, const Eigen::Vector3d& x){
@@ -207,15 +206,12 @@ void EKFSLAM::updateMeasurement(){
 		 * TODO: data association
 		 * **/
         int min_index = -1;
-        std::cout << "mState.size(): " << (mState.size()-3)/2 << std::endl;
-        std::cout << "num_obs: " << num_obs << std::endl;
         for(int j = 3; j < mState.size(); j+=2){
             int x = pt_transformed(0) - mState(j);
             int y = pt_transformed(1) - mState(j+1);
             int dist = pow(x,2)+pow(y,2);
             if(dist == 0){ min_index = j; }
             std::cout << "dist: " << dist << std::endl;
-            std::cout << "j: " << j << std::endl;
         }
         if(min_index != -1){ indices(i) = min_index; }
 
@@ -223,11 +219,11 @@ void EKFSLAM::updateMeasurement(){
             indices(i) = ++globalId;
             addNewLandmark(pt_transformed, Q);
         }
-        std::cout << "done iteration: " << i << std::endl;
+        std::cout << "mState.size(): " << (mState.size()-3)/2 << std::endl;
+        std::cout << "num_obs: " << num_obs << std::endl;
     }
     // simulating bearing model
     Eigen::VectorXd z = Eigen::VectorXd::Zero(2 * num_obs);
-    std::cout << "done bearing model" << std::endl;
     for (int i = 0; i < num_obs; ++i) {
         const Eigen::Vector2d& pt = cylinderPoints.row(i);
         z(2 * i, 0) = pt.norm();
@@ -244,10 +240,22 @@ void EKFSLAM::updateMeasurement(){
 		 * TODO: measurement update
          * Hi dim: (2N+3)*(2N+3)
 		 */
-        // int q = pow(z(2*i,0),2);
-        // Eigen::MatrixXd Fi = Eigen
-        // Eigen::MatrixXd Hi = 1/q * ;
-        std::cout << "done measurement update" << std::endl;
+        float q = pow(z(2*i,0),2);
+        float dx = cylinderPoints.row(i)(0); 
+        float dy = cylinderPoints.row(i)(1);
+        Eigen::MatrixXd Fi = Eigen::MatrixXd::Zero(5, mState.rows());
+        Eigen::MatrixXd lHi = Eigen::MatrixXd::Zero(2, Fi.rows());
+        lHi << -sqrt(q)*dx, -sqrt(q)*dy, 0, sqrt(q)*dx, sqrt(q)*dy,
+                dy,         dx,         -q, -dy,        dx;
+
+        Fi.block(0,0,3,3) = Eigen::MatrixXd::Identity(3,3);
+        int submatrix_idx = ((2*indices(i))+3)-2;
+        Fi.block(Fi.rows()-2, submatrix_idx-1, 2, 2) = Eigen::MatrixXd::Identity(2,2); 
+        Eigen::MatrixXd Hi = 1/q * lHi * Fi;
+
+        std::cout << "Fi dim:" << Fi.rows() << ", " << Fi.cols() << std::endl;
+        std::cout << "lHi dim:" << lHi.rows() << ", " << lHi.cols() << std::endl;
+        std::cout << "Hi dim:" << Hi.rows() << ", " << Hi.cols() << std::endl;
     }
 }
 
