@@ -35,8 +35,8 @@ EKFSLAM::EKFSLAM(ros::NodeHandle &nh):
 	 */
     mState = Eigen::VectorXd::Zero(3); // x, y, yaw
     mCov = Eigen::MatrixXd::Identity(3,3);
-    R = Eigen::MatrixXd::Identity(2,2); // process noise
-    Q = 0*Eigen::MatrixXd::Identity(2,2); // measurement noise
+    R = 0.01*Eigen::MatrixXd::Identity(2,2); // process noise
+    Q = 0.01*Eigen::MatrixXd::Identity(2,2); // measurement noise
 
     std::cout << "EKF SLAM initialized" << std::endl;
 }
@@ -171,9 +171,11 @@ void EKFSLAM::addNewLandmark(const Eigen::Vector2d& lm, const Eigen::MatrixXd& I
     
     int newlm_size = mCov.rows()+2;
     mCov.conservativeResize(newlm_size, newlm_size);
+    mCov.block(newlm_size-2, newlm_size-2, 2, 2) = InitCov;
 
     std::cout << "mState dim:" << mState.size() << std::endl;
     std::cout << "mCov dim:" << mCov.rows() << ", " << mCov.cols() << std::endl;
+    std::cout << "InitCov dim:" << InitCov.rows() << ", " << InitCov.cols() << std::endl;
     std::cout << "addnewLandMark done" << std::endl;
 
 }
@@ -211,9 +213,7 @@ void EKFSLAM::updateMeasurement(){
             int x = pt_transformed(0) - mState(j);
             int y = pt_transformed(1) - mState(j+1);
             int dist = pow(x,2)+pow(y,2);
-            if(dist == 0){
-                min_index = j;
-            }
+            if(dist == 0){ min_index = j; }
             std::cout << "dist: " << dist << std::endl;
             std::cout << "j: " << j << std::endl;
         }
