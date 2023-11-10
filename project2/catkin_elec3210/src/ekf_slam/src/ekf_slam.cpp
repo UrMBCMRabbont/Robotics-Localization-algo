@@ -107,6 +107,8 @@ double EKFSLAM::normalizeAngle(double angle){
 Eigen::MatrixXd EKFSLAM::jacobGt(const Eigen::VectorXd& state, Eigen::Vector2d ut, double dt){
 	int num_state = state.rows();
 	Eigen::MatrixXd Gt = Eigen::MatrixXd::Identity(num_state, num_state);
+    std::cout << "num_state dim:" << num_state << std::endl;
+
 	/**
 	 * TODO: implement the Jacobian Gt
 	 */
@@ -137,10 +139,17 @@ Eigen::MatrixXd EKFSLAM::jacobB(const Eigen::VectorXd& state, Eigen::Vector2d ut
 }
 
 void EKFSLAM::predictState(Eigen::VectorXd& state, Eigen::MatrixXd& cov, Eigen::Vector2d ut, double dt){
-	// Note: ut = [v, w]
-	state = state + jacobB(state, ut, dt) * ut; // update state
 	Eigen::MatrixXd Gt = jacobGt(state, ut, dt);
 	Eigen::MatrixXd Ft = jacobFt(state, ut, dt);
+
+    std::cout << "state dim:" << state.size() << std::endl;
+    std::cout << "cov dim:" << cov.rows() << ", " << cov.cols() << std::endl;
+    std::cout << "Gt dim:" << Gt.rows() << ", " << Gt.cols() << std::endl;
+    std::cout << "Ft dim:" << Ft.rows() << ", " << Ft.cols() << std::endl;
+    std::cout << "R dim:" << R.rows() << ", " << R.cols() << std::endl;
+	
+    // Note: ut = [v, w]
+	state = state + jacobB(state, ut, dt) * ut; // update state
 	cov = Gt * cov * Gt.transpose() + Ft * R * Ft.transpose(); // update covariance
 }
 
@@ -156,12 +165,17 @@ void EKFSLAM::addNewLandmark(const Eigen::Vector2d& lm, const Eigen::MatrixXd& I
 	/**
 	 * TODO: implement the function
 	 */
-    // mState.conservativeResize(mState.size()+lm.size());
-    // mState(mState.size()-2) = lm(0);
-    // mState(mState.size()-1) = lm(1);
+    mState.conservativeResize(mState.size()+lm.size());
+    mState(mState.size()-2) = lm(0);
+    mState(mState.size()-1) = lm(1);
     
-    // int newlm_size = mCov.size()+2;
-    // mCov.conservativeResize(newlm_size, newlm_size);
+    int newlm_size = mCov.rows()+2;
+    mCov.conservativeResize(newlm_size, newlm_size);
+
+    std::cout << "mState dim:" << mState.size() << std::endl;
+    std::cout << "mCov dim:" << mCov.rows() << ", " << mCov.cols() << std::endl;
+    std::cout << "addnewLandMark done" << std::endl;
+
 }
 
 void EKFSLAM::accumulateMap(){
@@ -189,15 +203,31 @@ void EKFSLAM::updateMeasurement(){
 		// Implement the data association here, i.e., find the corresponding landmark for each observation
 		/**
 		 * TODO: data association
-		 * Eigen::Matrix<double,3,2> Q = Sigma(lm, xwb)
 		 * **/
+        int min_index = -1;
+        std::cout << "mState.size(): " << (mState.size()-3)/2 << std::endl;
+        std::cout << "num_obs: " << num_obs << std::endl;
+        for(int j = 3; j < mState.size(); j+=2){
+            int x = pt_transformed(0) - mState(j);
+            int y = pt_transformed(1) - mState(j+1);
+            int dist = pow(x,2)+pow(y,2);
+            if(dist == 0){
+                min_index = j;
+            }
+            std::cout << "dist: " << dist << std::endl;
+            std::cout << "j: " << j << std::endl;
+        }
+        if(min_index != -1){ indices(i) = min_index; }
+
         if (indices(i) == -1){
             indices(i) = ++globalId;
             addNewLandmark(pt_transformed, Q);
         }
+        std::cout << "done iteration: " << i << std::endl;
     }
     // simulating bearing model
     Eigen::VectorXd z = Eigen::VectorXd::Zero(2 * num_obs);
+    std::cout << "done bearing model" << std::endl;
     for (int i = 0; i < num_obs; ++i) {
         const Eigen::Vector2d& pt = cylinderPoints.row(i);
         z(2 * i, 0) = pt.norm();
@@ -212,7 +242,12 @@ void EKFSLAM::updateMeasurement(){
 		// Implement the measurement update here, i.e., update the state vector and covariance matrix
 		/**
 		 * TODO: measurement update
+         * Hi dim: (2N+3)*(2N+3)
 		 */
+        // int q = pow(z(2*i,0),2);
+        // Eigen::MatrixXd Fi = Eigen
+        // Eigen::MatrixXd Hi = 1/q * ;
+        std::cout << "done measurement update" << std::endl;
     }
 }
 
