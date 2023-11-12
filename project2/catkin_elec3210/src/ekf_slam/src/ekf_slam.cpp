@@ -36,7 +36,7 @@ EKFSLAM::EKFSLAM(ros::NodeHandle &nh):
     mState = Eigen::VectorXd::Zero(3); // x, y, yaw
     mCov = Eigen::MatrixXd::Identity(3,3);
     Eigen::VectorXd n = Eigen::VectorXd::Zero(2);
-    n << 1e-4, 1e-4;
+    n << 1e+1, 1e-4;
     R = n*n.transpose(); // process noise
     Q = 1e+100*Eigen::MatrixXd::Identity(2,2); // measurement noise
 
@@ -168,11 +168,14 @@ void EKFSLAM::addNewLandmark(const Eigen::Vector2d& lm, const Eigen::MatrixXd& I
     mState(mState.size()-2) = lm(0);
     mState(mState.size()-1) = lm(1);
     
-    int newlm_size = mCov.rows()+2;
+    int old_size = mCov.rows();
+    int newlm_size = old_size + 2;
+    Eigen::MatrixXd zeros_cov = Eigen::MatrixXd::Zero(2,2);
     mCov.conservativeResize(newlm_size, newlm_size);
-    mCov.block(newlm_size-2, newlm_size-2, 2, 2) = InitCov;
+    mCov.block(old_size, 0, 2,2) = zeros_cov;
+    mCov.block(0, old_size, 2,2) = zeros_cov;
+    mCov.block(old_size, old_size, 2, 2) = InitCov;
 
-    // std::cout << "mState dim:" << mState.size() << std::endl;
     // std::cout << "mCov dim:" << mCov.rows() << ", " << mCov.cols() << std::endl;
     // std::cout << "InitCov dim:" << InitCov.rows() << ", " << InitCov.cols() << std::endl;
     // std::cout << "addnewLandMark done" << std::endl;
