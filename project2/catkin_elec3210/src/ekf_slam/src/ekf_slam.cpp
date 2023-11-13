@@ -83,9 +83,6 @@ void EKFSLAM::run() {
 		// Extended Kalman Filter
 		// 1. predict
         predictState(mState, mCov, ut, dt);
-        if(std::isnan(mState(0)) || std::isnan(mState(1)) || std::isnan(mState(2))){
-            while(1){ std::cout << "predict state NAN" << std::endl; }
-        }
 		// 2. update
         updateMeasurement();
 		timer.toc();
@@ -145,16 +142,13 @@ void EKFSLAM::predictState(Eigen::VectorXd& state, Eigen::MatrixXd& cov, Eigen::
     // Note: ut = [v, w]
 	Eigen::MatrixXd Gt = jacobGt(state, ut, dt);
 	Eigen::MatrixXd Ft = jacobFt(state, ut, dt);
-    if(std::isnan(state(0)) || std::isnan(state(1)) || std::isnan(state(2))){
-        while(1){
-            std::cout << "Gt: \n" << Gt << std::endl;
-            std::cout << "Ft: \n" << Ft << std::endl;
-            std::cout << "state: \n" << state << std::endl;
-            std::cout << "cov: \n" << cov << std::endl;
-        }
-        // std::cout << "state dim:" << state.size() << std::endl;
-        // std::cout << "R dim:" << R.rows() << ", " << R.cols() << std::endl;
-    }
+    
+    // std::cout << "Gt: \n" << Gt << std::endl;
+    // std::cout << "Ft: \n" << Ft << std::endl;
+    // std::cout << "state: \n" << state << std::endl;
+    // std::cout << "cov: \n" << cov << std::endl;
+    // std::cout << "state dim:" << state.size() << std::endl;
+    // std::cout << "R dim:" << R.rows() << ", " << R.cols() << std::endl;
 	state = state + jacobB(state, ut, dt) * ut; // update state
 	cov = Gt * cov * Gt.transpose() + Ft * R * Ft.transpose(); // update covariance
     // state(2) = normalizeAngle(state(2));
@@ -183,16 +177,12 @@ void EKFSLAM::addNewLandmark(const Eigen::Vector2d& lm, const Eigen::MatrixXd& I
     int newlm_size = old_size + 2;
     Eigen::MatrixXd zeros_cov = Eigen::MatrixXd::Zero(2,2);
     mCov.conservativeResize(newlm_size, newlm_size);
-    mCov.block(old_size, 0, 2,2) = zeros_cov;
-    mCov.block(0, old_size, 2,2) = zeros_cov;
+    mCov.block(old_size, 0, 2,old_size) = Eigen::MatrixXd::Zero(2,old_size);
+    mCov.block(0, old_size, old_size, 2) = Eigen::MatrixXd::Zero(old_size,2);
     mCov.block(old_size, old_size, 2, 2) = InitCov;
 
-    if(std::isnan(lm(0)) || std::isnan(lm(1))){
-        while(1){
-            std::cout << "incoming landmark broke" << std::endl;
-        }
-    }
-        // std::cout << "mCov dim:" << mCov.rows() << ", " << mCov.cols() << std::endl;
+    
+    // std::cout << "mCov dim:" << mCov.rows() << ", " << mCov.cols() << std::endl;
     // std::cout << "InitCov dim:" << InitCov.rows() << ", " << InitCov.cols() << std::endl;
     // std::cout << "addnewLandMark done" << std::endl;
 
@@ -223,13 +213,6 @@ void EKFSLAM::updateMeasurement(){
     std::cout << "\nBIG loop: " << std::endl;
     for (int i = 0; i < num_obs; ++i) {
         Eigen::Vector2d pt_transformed = transform(cylinderPoints.row(i).transpose(), xwb); // 2D pole center in the world frame
-        if(std::isnan(mState(0)) || std::isnan(mState(1)) || std::isnan(mState(2))){
-            while(1){
-                std::cout << "mState(0) broke: " << mState(0) << std::endl;
-                std::cout << "mState(1) broke: " << mState(1) << std::endl;
-                std::cout << "mState(2) broke: " << mState(2) << std::endl;
-            }
-        }
 		// Implement the data association here, i.e., find the corresponding landmark for each observation
 		/**
 		 * TODO: data association
@@ -264,29 +247,21 @@ void EKFSLAM::updateMeasurement(){
             std::cout << "dist: " << dist << std::endl;
             std::cout << "min_dist: " << min_dist << std::endl;
             std::cout << "min_index: " << min_index << std::endl;
-            if(std::isnan(mState(0)) || std::isnan(mState(1)) || std::isnan(mState(2))){
-                while(1){
-                    std::cout << "CHECK NAN" << std::endl;
-                }
-            }
-            // if(std::isnan(mState(3+(2*j)))){
-            //     while(1){
-            //         std::cout << "CHECK NAN" << std::endl;
-            //         std::cout << "j: " << j << std::endl;
-            //         std::cout << "pt_transformed: " << pt_transformed(0) << std::endl;
-            //         std::cout << "pt_transformed: " << pt_transformed(1) << std::endl;
-            //         std::cout << "mState(0): " << mState(3+(2*j)) << std::endl;
-            //         std::cout << "mState(1): " << mState(3+(2*j)+1) << std::endl;
-            //         std::cout << "x: " << x << std::endl;
-            //         std::cout << "y: " << y << std::endl;
-            //         std::cout << "dist: " << dist << std::endl;
-            //         std::cout << "min_dist: " << min_dist << std::endl;
-            //         std::cout << "min_index: " << min_index << std::endl;std::cout << "j: " << j << std::endl;
-            //         std::cout << "mState landmark: " << (mState.size()-3)/2 << std::endl;
-            //         std::cout << "num_obs: " << num_obs << std::endl;
-            //         std::cout << "globalId: " << globalId+1 << std::endl;
-            //     }
-            // }
+            
+            // std::cout << "CHECK NAN" << std::endl;
+            // std::cout << "j: " << j << std::endl;
+            // std::cout << "pt_transformed: " << pt_transformed(0) << std::endl;
+            // std::cout << "pt_transformed: " << pt_transformed(1) << std::endl;
+            // std::cout << "mState(0): " << mState(3+(2*j)) << std::endl;
+            // std::cout << "mState(1): " << mState(3+(2*j)+1) << std::endl;
+            // std::cout << "x: " << x << std::endl;
+            // std::cout << "y: " << y << std::endl;
+            // std::cout << "dist: " << dist << std::endl;
+            // std::cout << "min_dist: " << min_dist << std::endl;
+            // std::cout << "min_index: " << min_index << std::endl;std::cout << "j: " << j << std::endl;
+            // std::cout << "mState landmark: " << (mState.size()-3)/2 << std::endl;
+            // std::cout << "num_obs: " << num_obs << std::endl;
+            // std::cout << "globalId: " << globalId+1 << std::endl;
         }
         if (indices(i) == -1){
             indices(i) = ++globalId;
@@ -337,22 +312,6 @@ void EKFSLAM::updateMeasurement(){
         Eigen::MatrixXd Kalman      = mCov * Hi.transpose() * ((Hi*mCov*Hi.transpose()+Q).inverse());
         Eigen::MatrixXd KH          = Kalman*Hi;
         Eigen::MatrixXd I           = Eigen::MatrixXd::Identity(KH.rows(), KH.cols());
-
-        if(std::isnan(mState(0)) || std::isnan(mState(1)) || std::isnan(mState(2))){
-            while(1){
-                std::cout << "mState(0) broke: " << mState(0) << std::endl;
-                std::cout << "mState(1) broke: " << mState(1) << std::endl;
-                std::cout << "mState(3) broke: " << mState(2) << std::endl;
-                std::cout << "q value: \n" << q << std::endl;
-                std::cout << "lHi value: \n" << lHi << std::endl;
-                std::cout << "Fi: \n" << Fi << std::endl;
-                std::cout << "Hi value: \n" << Hi << std::endl;
-                std::cout << "Kalman value: \n" << Kalman << std::endl;
-                std::cout << "(z_obs - z_hat) value: \n" << (z_obs - z_hat) << std::endl;
-                std::cout << "mState.segment(0,3) value: \n" << mState.segment(0,3) << std::endl;
-                std::cout << "mCov value: \n" << mCov << std::endl;
-            }
-        }
 
         mState_copy = mState + Kalman*(z_obs - z_hat);
         mCov_copy = (I - KH)*mCov;
