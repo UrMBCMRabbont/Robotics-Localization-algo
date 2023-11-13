@@ -36,7 +36,7 @@ EKFSLAM::EKFSLAM(ros::NodeHandle &nh):
     mState = Eigen::VectorXd::Zero(3); // x, y, yaw
     mCov = Eigen::MatrixXd::Identity(3,3);
     Eigen::VectorXd n = Eigen::VectorXd::Zero(2);
-    n << 1e+1, 1e-4;
+    n << 1e+10, 1e+10;
     R = n*n.transpose(); // process noise
     Q = 1e+100*Eigen::MatrixXd::Identity(2,2); // measurement noise
 
@@ -164,7 +164,9 @@ void EKFSLAM::addNewLandmark(const Eigen::Vector2d& lm, const Eigen::MatrixXd& I
 	/**
 	 * TODO: implement the function
 	 */
-    mState.conservativeResize(mState.size()+lm.size());
+    Eigen::VectorXd mState_copy = mState;
+    mState.conservativeResize(mState.size()+2);
+    mState.segment(0,mState_copy.size()) = mState_copy;
     mState(mState.size()-2) = lm(0);
     mState(mState.size()-1) = lm(1);
     
@@ -212,7 +214,7 @@ void EKFSLAM::updateMeasurement(){
 		 * TODO: data association
 		 * **/
         int min_index = -1;
-        float min_dist = 1e+9;
+        float min_dist = 99999;
         std::cout << "\n SMALL loop: " << std::endl;
         for(int j = 0; j < num_landmarks; j++){
             float x = pt_transformed(0) - mState(3+(2*j));
@@ -225,12 +227,24 @@ void EKFSLAM::updateMeasurement(){
                 // std::cout << "DEBUG DONE" << std::endl;
                 // shdist_hist(i) = min_dist; 
             }
+            for(int ind_idx = 0; ind_idx < indices.size(); ind_idx++){
+                int elementToCount = indices(ind_idx);
+                int count = std::count(indices.data(), indices.data() + indices.size(), elementToCount);
+                std::cout << "elementToCount: " << elementToCount << " = " << count << std::endl;
+                if(count > 1){ std::cout << "LM MATCHING ERROR" << std::endl; }
+            }
+
+
+
+
+            /****** PRINT SECTION *********/ 
             std::cout << "j: " << j << std::endl;
             std::cout << "dist: " << dist << std::endl;
             std::cout << "min_dist: " << min_dist << std::endl;
             std::cout << "min_index: " << min_index << std::endl;
-            if(globalId > 100){
+            if(std::isnan(mState(3+(2*j)))){
                 while(1){
+                    std::cout << "CHECK NAN" << std::endl;
                     std::cout << "j: " << j << std::endl;
                     std::cout << "pt_transformed: " << pt_transformed(0) << std::endl;
                     std::cout << "pt_transformed: " << pt_transformed(1) << std::endl;
@@ -240,7 +254,10 @@ void EKFSLAM::updateMeasurement(){
                     std::cout << "y: " << y << std::endl;
                     std::cout << "dist: " << dist << std::endl;
                     std::cout << "min_dist: " << min_dist << std::endl;
-                    std::cout << "min_index: " << min_index << std::endl;
+                    std::cout << "min_index: " << min_index << std::endl;std::cout << "j: " << j << std::endl;
+                    std::cout << "mState landmark: " << (mState.size()-3)/2 << std::endl;
+                    std::cout << "num_obs: " << num_obs << std::endl;
+                    std::cout << "globalId: " << globalId+1 << std::endl;
                 }
             }
         }
@@ -277,7 +294,7 @@ void EKFSLAM::updateMeasurement(){
         Eigen::MatrixXd Fi = Eigen::MatrixXd::Zero(5, mState.rows());
         Eigen::MatrixXd lHi = Eigen::MatrixXd::Zero(2, Fi.rows());
         lHi << -sqrt(q)*dx, -sqrt(q)*dy, 0, sqrt(q)*dx, sqrt(q)*dy,
-                dy,         dx,         -q, -dy,        dx;
+                dy,         -dx,         -q, -dy,        dx;
         z_hat(0) = sqrt(q);
         z_hat(1) = atan2(dy,dx)-mState(2);
         z_obs(0) = z(2*i,0);
@@ -288,12 +305,23 @@ void EKFSLAM::updateMeasurement(){
         Fi.block(Fi.rows()-2, submatrix_idx, 2, 2) = Eigen::MatrixXd::Identity(2,2); 
         Eigen::MatrixXd Hi = 1/q * lHi * Fi;
 
+        Eigen::MatrixXd mCov_copy = mCov;
         Eigen::MatrixXd Kalman = mCov*Hi.transpose()*((Hi*mCov*Hi.transpose()+Q).inverse());
         Eigen::MatrixXd KH = Kalman*Hi;
-        Eigen::MatrixXd I = Eigen::MatrixXd::Identity(KH.rows(), KH.cols()); 
-        mState((2*idx)+3) = mState((2*idx)+3) + Kalman.row(idx)*(z_obs - z_hat);
-        mState((2*idx)+3+1) = mState((2*idx)+3+1) + Kalman.row(idx)*(z_obs - z_hat);
-        mCov = (I - KH)*mCov;
+        Eigen::MatrixXd I = Eigen::MatrixXd::Identity(KH.rows(), KH.cols());
+        std::cout << "mCov dim:" << mCov.rows() << ", " << mCov.cols() << std::endl;
+        std::cout << "Kalman dim:" << Kalman.rows() << ", " << Kalman.cols() << std::endl;
+        std::cout << "KH dim:" << KH.rows() << ", " << KH.cols() << std::endl;
+        std::cout << "I dim:" << I.rows() << ", " << I.cols() << std::endl;
+
+        mState((2*idx)+3) = mState((2*idx)+3) + Kalman.row((2*idx)+3)*(z_obs - z_hat);
+        mState((2*idx)+3+1) = mState((2*idx)+3+1) + Kalman.row((2*idx)+3+1)*(z_obs - z_hat);
+        mCov_copy = (I - KH)*mCov;
+        mCov.block((2*idx)+3, 0, 2, (2*idx)+3) = mCov_copy.block((2*idx)+3, 0, 2, (2*idx)+3);
+        mCov.block(0, (2*idx)+3, (2*idx)+3, 2) = mCov_copy.block(0, (2*idx)+3, (2*idx)+3, 2);
+        mCov.block((2*idx)+3, (2*idx)+3, 2, 2) = mCov_copy.block((2*idx)+3, (2*idx)+3, 2, 2);
+        mCov.block(0, 0, 3, 3)                 = mCov_copy.block(0, 0, 3, 3);
+
         // std::cout << "mCov value: \n" << mCov << std::endl;
         std::cout << "all done" << std::endl;
 
