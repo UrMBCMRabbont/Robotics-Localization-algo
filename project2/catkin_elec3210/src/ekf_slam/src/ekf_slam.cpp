@@ -36,9 +36,9 @@ EKFSLAM::EKFSLAM(ros::NodeHandle &nh):
     mState = Eigen::VectorXd::Zero(3); // x, y, yaw
     mCov = Eigen::MatrixXd::Identity(3,3);
     R = Eigen::MatrixXd::Identity(2,2);
-    R << 1e-5, 0,
+    R << 1e-10, 0,
          0, 1e-10; // process noise
-    Q = 1e+5*Eigen::MatrixXd::Identity(2,2); // measurement noise
+    Q = 3e+7*Eigen::MatrixXd::Identity(2,2); // measurement noise
 
     std::cout << "EKF SLAM initialized" << std::endl;
 }
@@ -208,7 +208,7 @@ void EKFSLAM::updateMeasurement(){
     int num_obs = cylinderPoints.rows(); // number of observations
     Eigen::VectorXi indices = Eigen::VectorXi::Ones(num_obs) * -1; // indices of landmarks in the state vector
     Eigen::VectorXd shdist_hist = Eigen::VectorXd::Ones(num_obs) * -1; // record the shortest dist for each mState landmarks
-    Eigen::VectorXd sh2dist_hist = Eigen::VectorXd::Ones(num_obs) * -1; // record the shortest dist for each mState landmarks
+    Eigen::VectorXd sh2dist_idx = Eigen::VectorXd::Ones(num_obs) * -1; // record the shortest dist for each mState landmarks
 
     std::cout << "\nBIG loop: " << std::endl;
     for (int i = 0; i < num_obs; ++i) {
@@ -218,7 +218,7 @@ void EKFSLAM::updateMeasurement(){
 		 * TODO: data association
 		 * **/
         int min_index = -1;
-        float min_dist = 4;
+        float min_dist = 6;
         std::cout << "\n SMALL loop: " << std::endl;
         Eigen::VectorXd dist_hist = Eigen::VectorXd::Ones(num_landmarks) * -1;
         for(int j = 0; j < num_landmarks; j++){
@@ -236,7 +236,8 @@ void EKFSLAM::updateMeasurement(){
                     if(dist_hist(dist_idx) != min_dist){
                         for(int dist_idx1 = 0; dist_idx1 < dist_hist.size(); dist_idx1++){
                             if(dist_hist(dist_idx) <= dist_hist(dist_idx1) && dist_hist(dist_idx) > min_dist){ // second short dist
-                                sh2dist_hist(i) = dist_hist(dist_idx);
+                                sh2dist_idx(i) = dist_idx;
+                                std::cout << "dist_idx: " << dist_idx << std::endl;
                             }
                         }
                     }
@@ -267,10 +268,6 @@ void EKFSLAM::updateMeasurement(){
             /****** PRINT SECTION *********/ 
         }
 
-        if (indices(i) == -1){
-            indices(i) = ++globalId;
-            addNewLandmark(pt_transformed, Q);
-        }
         for(int ind_idx = 0; ind_idx < indices.size(); ind_idx++){
             int elementToCount = indices(ind_idx);
             int count = std::count(indices.data(), indices.data() + indices.size(), elementToCount);
@@ -281,17 +278,21 @@ void EKFSLAM::updateMeasurement(){
                         if(shdist_hist(ind_idx1) > shdist_hist(ind_idx)){
                             // indices(ind_idx1) = -1;
                             indices(ind_idx) = elementToCount;
-                            indices(ind_idx1) = sh2dist_hist(ind_idx1);
+                            indices(ind_idx1) = sh2dist_idx(ind_idx1);
                         } else {
                             // indices(ind_idx) = -1;
                             indices(ind_idx1) = elementToCount;
-                            indices(ind_idx) = sh2dist_hist(ind_idx);
+                            indices(ind_idx) = sh2dist_idx(ind_idx);
                         }
                     }
                 }
                 std::cout << "LM MATCHING ERROR" << std::endl;
                 std:cout << "count: " << count << std::endl;
             }
+        }
+        if (indices(i) == -1){
+            indices(i) = ++globalId;
+            addNewLandmark(pt_transformed, Q);
         }
         std::cout << "mState landmark: " << (mState.size()-3)/2 << std::endl;
         std::cout << "num_obs: " << num_obs << std::endl;
@@ -342,11 +343,10 @@ void EKFSLAM::updateMeasurement(){
         mState_copy = mState + Kalman*(z_obs - z_hat);
         mCov_copy = (I - KH)*mCov;
 
-        // mState = mState_copy;
         // mCov = mCov_copy;
-        mState.segment(0,3)                    = mState_copy.segment(0,3);
-        mState((2*idx)+3)                      = mState_copy((2*idx)+3) ;
-        mState((2*idx)+3+1)                    = mState_copy((2*idx)+3+1);
+        mState.segment(0,3)         = mState_copy.segment(0,3);
+        mState((2*idx)+3)           = mState_copy((2*idx)+3) ;
+        mState((2*idx)+3+1)         = mState_copy((2*idx)+3+1);
         mCov.block(0, 0, 3, 3)                 = mCov_copy.block(0, 0, 3, 3);
         mCov.block((2*idx)+3, 0, 2, (2*idx)+3) = mCov_copy.block((2*idx)+3, 0, 2, (2*idx)+3);
         mCov.block(0, (2*idx)+3, (2*idx)+3, 2) = mCov_copy.block(0, (2*idx)+3, (2*idx)+3, 2);
