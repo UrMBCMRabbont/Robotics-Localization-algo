@@ -35,10 +35,10 @@ EKFSLAM::EKFSLAM(ros::NodeHandle &nh):
 	 */
     mState = Eigen::VectorXd::Zero(3); // x, y, yaw
     mCov = Eigen::MatrixXd::Identity(3,3);
-    Eigen::VectorXd n = Eigen::VectorXd::Zero(2);
-    n << 1e-10, 1e-10;
-    R = n*n.transpose(); // process noise
-    Q = 1e+100*Eigen::MatrixXd::Identity(2,2); // measurement noise
+    R = Eigen::MatrixXd::Identity(2,2);
+    R << 1e-5, 0,
+         0, 1e-1; // process noise
+    Q = 1e+10*Eigen::MatrixXd::Identity(2,2); // measurement noise
 
     std::cout << "EKF SLAM initialized" << std::endl;
 }
@@ -151,8 +151,7 @@ void EKFSLAM::predictState(Eigen::VectorXd& state, Eigen::MatrixXd& cov, Eigen::
     // std::cout << "R dim:" << R.rows() << ", " << R.cols() << std::endl;
 	state = state + jacobB(state, ut, dt) * ut; // update state
 	cov = Gt * cov * Gt.transpose() + Ft * R * Ft.transpose(); // update covariance
-    // state(2) = normalizeAngle(state(2));
-	
+    state(2) = normalizeAngle(state(2));
 }
 
 Eigen::Vector2d EKFSLAM::transform(const Eigen::Vector2d& p, const Eigen::Vector3d& x){
@@ -208,7 +207,7 @@ void EKFSLAM::updateMeasurement(){
     int num_landmarks = (mState.rows() - 3) / 2; // number of landmarks in the state vector
     int num_obs = cylinderPoints.rows(); // number of observations
     Eigen::VectorXi indices = Eigen::VectorXi::Ones(num_obs) * -1; // indices of landmarks in the state vector
-    Eigen::VectorXd shdist_hist = Eigen::VectorXd::Ones(num_landmarks)*(1e+10); // record the shortest dist for each mState landmarks
+    Eigen::VectorXd shdist_hist = Eigen::VectorXd::Ones(num_obs) * -1; // record the shortest dist for each mState landmarks
 
     std::cout << "\nBIG loop: " << std::endl;
     for (int i = 0; i < num_obs; ++i) {
@@ -218,7 +217,7 @@ void EKFSLAM::updateMeasurement(){
 		 * TODO: data association
 		 * **/
         int min_index = -1;
-        float min_dist = 4;
+        float min_dist = 6;
         std::cout << "\n SMALL loop: " << std::endl;
         for(int j = 0; j < num_landmarks; j++){
             float x = pt_transformed(0) - mState(3+(2*j));
@@ -229,14 +228,8 @@ void EKFSLAM::updateMeasurement(){
                 min_index = j;
                 min_dist = dist;
                 indices(i) = min_index;
+                shdist_hist(i) = min_dist;
                 // std::cout << "DEBUG DONE" << std::endl;
-                // shdist_hist(i) = min_dist;
-            }
-            for(int ind_idx = 0; ind_idx < indices.size(); ind_idx++){
-                int elementToCount = indices(ind_idx);
-                int count = std::count(indices.data(), indices.data() + indices.size(), elementToCount);
-                std::cout << "elementToCount: " << elementToCount << " = " << count << std::endl;
-                if(count > 1 && elementToCount != -1){ std::cout << "LM MATCHING ERROR" << std::endl; }
             }
 
 
@@ -262,10 +255,35 @@ void EKFSLAM::updateMeasurement(){
             // std::cout << "mState landmark: " << (mState.size()-3)/2 << std::endl;
             // std::cout << "num_obs: " << num_obs << std::endl;
             // std::cout << "globalId: " << globalId+1 << std::endl;
+            /****** PRINT SECTION *********/ 
         }
+
+
         if (indices(i) == -1){
             indices(i) = ++globalId;
             addNewLandmark(pt_transformed, Q);
+        }
+        for(int ind_idx = 0; ind_idx < indices.size(); ind_idx++){
+            int elementToCount = indices(ind_idx);
+            int count = std::count(indices.data(), indices.data() + indices.size(), elementToCount);
+            std::cout << "elementToCount: " << elementToCount << " = " << count << std::endl;
+            if(count > 1 && elementToCount != -1){
+                for(int ind_idx1 = 0; ind_idx1 < indices.size(); ind_idx1++){
+                    if(indices(ind_idx1) == elementToCount){
+                        if(shdist_hist(ind_idx1) > shdist_hist(ind_idx)){
+                            indices(ind_idx) = elementToCount;
+                            indices(ind_idx1) = -1;
+                        } else {
+                            indices(ind_idx) = -1;
+                            indices(ind_idx1) = elementToCount;
+                        }
+                    }
+                }
+                std::cout << "LM MATCHING ERROR" << std::endl;
+                std:cout << "count: " << count << std::endl;
+                count = 0;
+            }
+            // while(count > 1)
         }
         std::cout << "mState landmark: " << (mState.size()-3)/2 << std::endl;
         std::cout << "num_obs: " << num_obs << std::endl;
@@ -316,13 +334,15 @@ void EKFSLAM::updateMeasurement(){
         mState_copy = mState + Kalman*(z_obs - z_hat);
         mCov_copy = (I - KH)*mCov;
 
-        mState.segment(0,3)                    = mState_copy.segment(0,3);
-        mState((2*idx)+3)                      = mState_copy((2*idx)+3) ;
-        mState((2*idx)+3+1)                    = mState_copy((2*idx)+3+1);
-        mCov.block((2*idx)+3, 0, 2, (2*idx)+3) = mCov_copy.block((2*idx)+3, 0, 2, (2*idx)+3);
-        mCov.block(0, (2*idx)+3, (2*idx)+3, 2) = mCov_copy.block(0, (2*idx)+3, (2*idx)+3, 2);
-        mCov.block((2*idx)+3, (2*idx)+3, 2, 2) = mCov_copy.block((2*idx)+3, (2*idx)+3, 2, 2);
-        mCov.block(0, 0, 3, 3)                 = mCov_copy.block(0, 0, 3, 3);
+        mState = mState_copy;
+        mCov = mCov_copy;
+        // mState.segment(0,3)                    = mState_copy.segment(0,3);
+        // mState((2*idx)+3)                      = mState_copy((2*idx)+3) ;
+        // mState((2*idx)+3+1)                    = mState_copy((2*idx)+3+1);
+        // mCov.block(0, 0, 3, 3)                 = mCov_copy.block(0, 0, 3, 3);
+        // mCov.block((2*idx)+3, 0, 2, (2*idx)+3) = mCov_copy.block((2*idx)+3, 0, 2, (2*idx)+3);
+        // mCov.block(0, (2*idx)+3, (2*idx)+3, 2) = mCov_copy.block(0, (2*idx)+3, (2*idx)+3, 2);
+        // mCov.block((2*idx)+3, (2*idx)+3, 2, 2) = mCov_copy.block((2*idx)+3, (2*idx)+3, 2, 2);
 
         // std::cout << "Fi dim:" << Fi.rows() << ", " << Fi.cols() << std::endl;
         // std::cout << "mCov dim:" << mCov.rows() << ", " << mCov.cols() << std::endl;
