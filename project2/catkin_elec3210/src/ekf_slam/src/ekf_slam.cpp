@@ -218,7 +218,7 @@ void EKFSLAM::updateMeasurement(){
 		 * TODO: data association
 		 * **/
         int min_index = -1;
-        float min_dist = 6;
+        float min_dist = 4;
         std::cout << "\n SMALL loop: " << std::endl;
         Eigen::VectorXd dist_hist = Eigen::VectorXd::Ones(num_landmarks) * -1;
         for(int j = 0; j < num_landmarks; j++){
@@ -294,6 +294,7 @@ void EKFSLAM::updateMeasurement(){
             indices(i) = ++globalId;
             addNewLandmark(pt_transformed, Q);
         }
+        if(shdist_hist(i) > 0.1){ indices(i) = -1; }
         std::cout << "mState landmark: " << (mState.size()-3)/2 << std::endl;
         std::cout << "num_obs: " << num_obs << std::endl;
     }
