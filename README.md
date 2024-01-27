@@ -1,4 +1,4 @@
-# Localization-algo
+1. # Localization && Mapping
 ## Project 1: ICP Odometry
 https://github.com/UrMBCMRabbont/Robotics-Localization-algo/assets/80027409/42868a6a-bebe-4e73-8308-fe8c3abf7564
 ## Project 2: EKF SLAM
